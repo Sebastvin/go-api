@@ -3,6 +3,9 @@ package main
 import (
 	"log"
 	"net/http"
+	"strings"
+	"sync"
+	"time"
 )
 
 type APIServer struct {
@@ -36,6 +39,7 @@ func (s *APIServer) Run() error {
 	middlewareChain := MiddlewareChain(
 		RequestLoggerMiddleware,
 		RequireAuthMiddleware,
+		ThrottlingMiddleware(5*time.Second),
 	)
 
 	server := http.Server{
@@ -77,5 +81,40 @@ func MiddlewareChain(middleware ...Middleware) Middleware {
 		}
 
 		return next.ServeHTTP
+	}
+}
+
+var lastRequestTime = make(map[string]time.Time)
+var mu sync.Mutex
+
+func ThrottlingMiddleware(limit time.Duration) Middleware {
+	return func(next http.Handler) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+
+			path := r.URL.Path
+			if !strings.Contains(path, "/users/") {
+				http.Error(w, "Invalid URL format", http.StatusBadRequest)
+				return
+			}
+
+			userID := path[len("/users/"):]
+			if userID == "" {
+				http.Error(w, "User ID is required", http.StatusBadRequest)
+				return
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			lastTime, exists := lastRequestTime[userID]
+			if exists && time.Since(lastTime) < limit {
+				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+				return
+			}
+
+			lastRequestTime[userID] = time.Now()
+
+			next.ServeHTTP(w, r)
+		}
 	}
 }
