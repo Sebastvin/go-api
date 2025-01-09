@@ -16,14 +16,22 @@ func NewAPIServer(addr string) *APIServer {
 }
 
 func (s *APIServer) Run() error {
-	router := http.NewServeMux()
-	router.HandleFunc("GET /users/{userID}", func(w http.ResponseWriter, r *http.Request) {
+	routerV1 := http.NewServeMux()
+	routerV2 := http.NewServeMux()
+
+	routerV1.HandleFunc("GET /users/{userID}", func(w http.ResponseWriter, r *http.Request) {
 		userID := r.PathValue("userID")
-		w.Write([]byte("User ID: " + userID))
+		w.Write([]byte("User ID: " + userID + " API V1"))
+	})
+
+	routerV2.HandleFunc("GET /users/{userID}", func(w http.ResponseWriter, r *http.Request) {
+		userID := r.PathValue("userID")
+		w.Write([]byte("User ID: " + userID + " API V2"))
 	})
 
 	adminRouter := http.NewServeMux()
-	adminRouter.Handle("/api/v1/", http.StripPrefix("/api/v1", router))
+	adminRouter.Handle("/api/v1/", http.StripPrefix("/api/v1", routerV1))
+	adminRouter.Handle("/api/v2/", http.StripPrefix("/api/v2", routerV2))
 
 	middlewareChain := MiddlewareChain(
 		RequestLoggerMiddleware,
