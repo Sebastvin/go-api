@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"strings"
@@ -39,7 +40,8 @@ func (s *APIServer) Run() error {
 	middlewareChain := MiddlewareChain(
 		RequestLoggerMiddleware,
 		RequireAuthMiddleware,
-		ThrottlingMiddleware(5*time.Second),      // One request per second
+		ValidateUserIDMiddleware,
+		ThrottlingMiddleware(5*time.Second),      // One second interval
 		RateLimitingMiddleware(3, 1*time.Minute), // Five request per minute
 	)
 
@@ -85,36 +87,43 @@ func MiddlewareChain(middleware ...Middleware) Middleware {
 	}
 }
 
-var lastRequestTime = make(map[string]time.Time)
-var mu sync.Mutex
+func ValidateUserIDMiddleware(next http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		if !strings.Contains(path, "/users/") {
+			http.Error(w, "Invalid URL format", http.StatusBadRequest)
+			return
+		}
+
+		userID := strings.TrimPrefix(path, "/users/")
+		if userID == "" {
+			http.Error(w, "User ID is required", http.StatusBadRequest)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), "userID", userID)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	}
+}
 
 func ThrottlingMiddleware(limit time.Duration) Middleware {
+	var lastRequestTime sync.Map
+
 	return func(next http.Handler) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			userID := r.Context().Value("userID").(string)
 
-			path := r.URL.Path
-			if !strings.Contains(path, "/users/") {
-				http.Error(w, "Invalid URL format", http.StatusBadRequest)
-				return
-			}
+			value, _ := lastRequestTime.LoadOrStore(userID, time.Time{})
+			lastTime := value.(time.Time)
 
-			userID := path[len("/users/"):]
-			if userID == "" {
-				http.Error(w, "User ID is required", http.StatusBadRequest)
-				return
-			}
-
-			mu.Lock()
-			defer mu.Unlock()
-
-			lastTime, exists := lastRequestTime[userID]
-			if exists && time.Since(lastTime) < limit {
+			if time.Since(lastTime) < limit {
 				http.Error(w, "Too Many Requests [Throttling Middleware Block Request]", http.StatusTooManyRequests)
 				return
 			}
 
-			lastRequestTime[userID] = time.Now()
-
+			lastRequestTime.Store(userID, time.Now())
 			next.ServeHTTP(w, r)
 		}
 	}
@@ -125,18 +134,7 @@ func RateLimitingMiddleware(maxRequests int, duration time.Duration) Middleware 
 
 	return func(next http.Handler) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-
-			path := r.URL.Path
-			if !strings.Contains(path, "/users/") {
-				http.Error(w, "Invalid URL format", http.StatusBadRequest)
-				return
-			}
-
-			userID := path[len("/users/"):]
-			if userID == "" {
-				http.Error(w, "User ID is required", http.StatusBadRequest)
-				return
-			}
+			userID := r.Context().Value("userID").(string)
 
 			value, _ := requestCounts.LoadOrStore(userID, &rateLimiter{
 				requestCount: 0,
