@@ -98,13 +98,14 @@ func ValidateUserIDMiddleware(next http.Handler) http.HandlerFunc {
 			return
 		}
 
-		userIDStr := strings.TrimPrefix(path, "/users/")
-		if userIDStr == "" {
+		parts := strings.Split(path, "/users/")
+		if len(parts) != 2 {
 			http.Error(w, "User ID is required", http.StatusBadRequest)
 			return
 		}
 
-		userID, err := strconv.Atoi(userIDStr)
+		userID, err := strconv.Atoi(parts[1])
+
 		if err != nil {
 			http.Error(w, "Invalid user ID format, ID must be a int", http.StatusBadRequest)
 			return
@@ -121,7 +122,7 @@ func ThrottlingMiddleware(limit time.Duration) Middleware {
 
 	return func(next http.Handler) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			userID := r.Context().Value("userID").(string)
+			userID := r.Context().Value("userID").(int)
 
 			value, _ := lastRequestTime.LoadOrStore(userID, time.Time{})
 			lastTime := value.(time.Time)
@@ -142,7 +143,7 @@ func RateLimitingMiddleware(maxRequests int, duration time.Duration) Middleware 
 
 	return func(next http.Handler) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			userID := r.Context().Value("userID").(string)
+			userID := r.Context().Value("userID").(int)
 
 			value, _ := requestCounts.LoadOrStore(userID, &rateLimiter{
 				requestCount: 0,
