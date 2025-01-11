@@ -173,7 +173,7 @@ func RateLimitingMiddleware(maxRequests int, duration time.Duration) Middleware 
 }
 
 func WhitelistMiddleware(next http.Handler) http.HandlerFunc {
-	allowedIPs := []string{"172.17.0.1"}
+	allowedIPs := []string{"172.17.0.1", "100.64.0.6"}
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		clientIP := strings.Split(r.RemoteAddr, ":")[0]
