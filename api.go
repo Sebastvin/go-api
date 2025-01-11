@@ -183,6 +183,8 @@ func WhitelistMiddleware(next http.Handler) http.HandlerFunc {
 
 	allowedIPs := strings.Split(allowedIPsStr, ",")
 
+	log.Printf("Whitelist configured with IPs: %v", allowedIPs)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		clientIP := strings.Split(r.RemoteAddr, ":")[0]
 
