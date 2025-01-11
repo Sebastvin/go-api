@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -173,7 +174,14 @@ func RateLimitingMiddleware(maxRequests int, duration time.Duration) Middleware 
 }
 
 func WhitelistMiddleware(next http.Handler) http.HandlerFunc {
-	allowedIPs := []string{"172.17.0.1", "100.64.0.6"}
+	allowedIPsStr := os.Getenv("ALLOWED_IPS")
+
+	if allowedIPsStr == "" {
+		log.Printf("Warning: ALLOWED_IPS not set, using default IPs")
+		allowedIPsStr = "172.17.0.1"
+	}
+
+	allowedIPs := strings.Split(allowedIPsStr, ",")
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		clientIP := strings.Split(r.RemoteAddr, ":")[0]
