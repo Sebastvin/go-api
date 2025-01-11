@@ -43,6 +43,7 @@ func (s *APIServer) Run() error {
 		ValidateUserIDMiddleware,
 		ThrottlingMiddleware(5*time.Second),      // One second interval
 		RateLimitingMiddleware(3, 1*time.Minute), // Five request per minute
+		WhitelistMiddleware,
 	)
 
 	server := http.Server{
@@ -160,6 +161,26 @@ func RateLimitingMiddleware(maxRequests int, duration time.Duration) Middleware 
 			limiter.requestCount++
 			next.ServeHTTP(w, r)
 		}
+	}
+}
+
+func WhitelistMiddleware(next http.Handler) http.HandlerFunc {
+	allowedIPs := []string{"172.17.0.1"}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		clientIP := strings.Split(r.RemoteAddr, ":")[0]
+
+		log.Printf("Client addre : %s", clientIP)
+
+		for _, ip := range allowedIPs {
+			if strings.Contains(clientIP, ip) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+		}
+
+		http.Error(w, "Forbidden", http.StatusForbidden)
 	}
 }
 
