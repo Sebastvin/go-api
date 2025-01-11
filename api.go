@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -97,9 +98,15 @@ func ValidateUserIDMiddleware(next http.Handler) http.HandlerFunc {
 			return
 		}
 
-		userID := strings.TrimPrefix(path, "/users/")
-		if userID == "" {
+		userIDStr := strings.TrimPrefix(path, "/users/")
+		if userIDStr == "" {
 			http.Error(w, "User ID is required", http.StatusBadRequest)
+			return
+		}
+
+		userID, err := strconv.Atoi(userIDStr)
+		if err != nil {
+			http.Error(w, "Invalid user ID format, ID must be a int", http.StatusBadRequest)
 			return
 		}
 
